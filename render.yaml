@@ -1,0 +1,97 @@
+services:
+  # Backend API Service
+  - type: web
+    name: alibee-affiliate-api
+    env: python
+    plan: free
+    region: singapore
+    buildCommand: |
+      pip install --upgrade pip
+      pip install -r requirements.txt
+      python backend/deploy_migration.py
+    startCommand: |
+      cd backend && python -m uvicorn production_app:app --host 0.0.0.0 --port $PORT --workers 1
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      # Python Configuration
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: PORT
+        value: 10000
+      
+      # Database Configuration (from database service)
+      - key: DB_HOST
+        fromDatabase:
+          name: alibee-mysql
+          property: host
+      - key: DB_PORT
+        fromDatabase:
+          name: alibee-mysql
+          property: port
+      - key: DB_NAME
+        fromDatabase:
+          name: alibee-mysql
+          property: database
+      - key: DB_USER
+        fromDatabase:
+          name: alibee-mysql
+          property: user
+      - key: DB_PASSWORD
+        fromDatabase:
+          name: alibee-mysql
+          property: password
+      
+      # AliExpress API Configuration (set these in Render dashboard)
+      - key: APP_KEY
+        sync: false
+      - key: APP_SECRET
+        sync: false
+      
+      # Application Configuration
+      - key: ALLOWED_ORIGINS
+        value: "*"
+      - key: DEFAULT_PAGE_SIZE
+        value: "20"
+      - key: MAX_PAGE_SIZE
+        value: "100"
+      - key: DAILY_PRODUCTS_ENABLED
+        value: "false"
+      - key: EXCHANGE_RATE_ENABLED
+        value: "false"
+      
+      # Production Environment
+      - key: ENVIRONMENT
+        value: "production"
+      - key: DEBUG
+        value: "false"
+
+  # Frontend Static Site Service
+  - type: web
+    name: alibee-affiliate-frontend
+    env: static
+    plan: free
+    region: singapore
+    buildCommand: |
+      cd frontend
+      npm ci
+      cp env.production .env.production
+      npm run build
+    staticPublishPath: ./frontend/dist
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: VITE_API_BASE_URL
+        value: https://alibee-affiliate-api.onrender.com
+      - key: VITE_API_PREFIX
+        value: ""
+
+# Database Service
+databases:
+  - name: alibee-mysql
+    plan: free
+    databaseName: alibee_affiliate
+    user: alibee_user
+    region: singapore
