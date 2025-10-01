@@ -9,9 +9,9 @@ services:
       pip install --upgrade pip
       pip install -r requirements.txt
       python backend/deploy_migration.py
-    startCommand: |
-      cd backend && python -m uvicorn production_app:app --host 0.0.0.0 --port $PORT --workers 1
-    healthCheckPath: /health
+      startCommand: |
+      python -m uvicorn production_app:app --host 0.0.0.0 --port $PORT --workers 1
+      healthCheckPath: /api/health
     autoDeploy: true
     envVars:
       # Python Configuration
@@ -86,7 +86,7 @@ services:
       - key: VITE_API_BASE_URL
         value: https://alibee-affiliate-api.onrender.com
       - key: VITE_API_PREFIX
-        value: ""
+        value: "/api"
 
 # Database Service
 databases:
