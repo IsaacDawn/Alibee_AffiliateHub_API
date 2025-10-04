@@ -38,6 +38,19 @@ class DatabaseConnection:
                             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                         )
                     """)
+                    
+                    # Create currency_rate table
+                    conn.execute("""
+                        CREATE TABLE IF NOT EXISTS currency_rate (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            from_currency TEXT NOT NULL,
+                            to_currency TEXT NOT NULL,
+                            rate REAL NOT NULL,
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            UNIQUE(from_currency, to_currency)
+                        )
+                    """)
                     conn.commit()
                 logger.info("SQLite database initialized successfully")
             else:
@@ -256,6 +269,91 @@ class DatabaseOperations:
                         raise
         except Exception as e:
             return {"status": "error", "message": f"Failed to add unique constraint: {str(e)}"}
+    
+    # Currency Rate Operations
+    def get_currency_rate(self, from_currency: str, to_currency: str) -> Optional[float]:
+        """Get exchange rate between two currencies"""
+        try:
+            with self.db.get_cursor() as (cursor, connection):
+                cursor.execute(
+                    "SELECT rate FROM currency_rate WHERE from_currency = ? AND to_currency = ?",
+                    (from_currency, to_currency)
+                )
+                result = cursor.fetchone()
+                return result[0] if result else None
+        except Exception as e:
+            logger.error(f"Error getting currency rate: {e}")
+            return None
+    
+    def set_currency_rate(self, from_currency: str, to_currency: str, rate: float) -> bool:
+        """Set or update exchange rate between two currencies"""
+        try:
+            with self.db.get_cursor() as (cursor, connection):
+                # Check if rate already exists
+                cursor.execute(
+                    "SELECT id FROM currency_rate WHERE from_currency = ? AND to_currency = ?",
+                    (from_currency, to_currency)
+                )
+                existing = cursor.fetchone()
+                
+                if existing:
+                    # Update existing rate
+                    cursor.execute(
+                        "UPDATE currency_rate SET rate = ?, updated_at = CURRENT_TIMESTAMP WHERE from_currency = ? AND to_currency = ?",
+                        (rate, from_currency, to_currency)
+                    )
+                else:
+                    # Insert new rate
+                    cursor.execute(
+                        "INSERT INTO currency_rate (from_currency, to_currency, rate, created_at, updated_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+                        (from_currency, to_currency, rate)
+                    )
+                
+                connection.commit()
+                return True
+        except Exception as e:
+            logger.error(f"Error setting currency rate: {e}")
+            return False
+    
+    def get_all_currency_rates(self) -> List[Dict[str, Any]]:
+        """Get all currency exchange rates"""
+        try:
+            with self.db.get_cursor() as (cursor, connection):
+                cursor.execute(
+                    "SELECT from_currency, to_currency, rate, updated_at FROM currency_rate ORDER BY from_currency, to_currency"
+                )
+                rows = cursor.fetchall()
+                return [
+                    {
+                        'from_currency': row[0],
+                        'to_currency': row[1],
+                        'rate': row[2],
+                        'updated_at': row[3]
+                    }
+                    for row in rows
+                ]
+        except Exception as e:
+            logger.error(f"Error getting all currency rates: {e}")
+            return []
+    
+    def delete_currency_rate(self, from_currency: str, to_currency: str) -> bool:
+        """Delete a currency exchange rate"""
+        try:
+            with self.db.get_cursor() as (cursor, connection):
+                cursor.execute(
+                    "DELETE FROM currency_rate WHERE from_currency = ? AND to_currency = ?",
+                    (from_currency, to_currency)
+                )
+                connection.commit()
+                return cursor.rowcount > 0
+        except Exception as e:
+            logger.error(f"Error deleting currency rate: {e}")
+            return False
 
 # Create global database operations instance
 db_ops = DatabaseOperations()
+
+# Simple function for API endpoints to get database connection
+def get_db_connection():
+    """Get SQLite database connection for API endpoints"""
+    return sqlite3.connect("alibee_local.db")

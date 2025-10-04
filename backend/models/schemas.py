@@ -92,3 +92,25 @@ class HealthResponse(BaseModel):
     version: str
     database: str
     aliexpress_api: str
+
+class CurrencyRate(BaseModel):
+    """Model for currency exchange rate"""
+    id: Optional[int] = None
+    from_currency: str = Field(..., description="Source currency code (e.g., USD)")
+    to_currency: str = Field(..., description="Target currency code (e.g., EUR)")
+    rate: float = Field(..., description="Exchange rate from source to target currency")
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+class CurrencyRateUpdate(BaseModel):
+    """Model for updating currency exchange rate"""
+    from_currency: str = Field(..., description="Source currency code")
+    to_currency: str = Field(..., description="Target currency code")
+    rate: float = Field(..., description="Exchange rate")
+
+class CurrencyRateResponse(BaseModel):
+    """Model for currency rate response"""
+    from_currency: str
+    to_currency: str
+    rate: float
+    updated_at: str

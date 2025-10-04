@@ -9,6 +9,12 @@ from .exchange import router as exchange_router
 from .check import router as check_router
 from .save import router as save_router
 from .database import router as database_router
+from .likes import router as likes_router
+from .custom_titles import router as custom_titles_router
+from .dictionary import router as dictionary_router
+from .currency_rates import router as currency_rates_router
+from .currency_converter import router as currency_converter_router
+from .currency_detector import router as currency_detector_router
 
 # Create main router
 api_router = APIRouter()
@@ -23,5 +29,11 @@ api_router.include_router(exchange_router, tags=["exchange"])
 api_router.include_router(check_router, tags=["check"])
 api_router.include_router(save_router, tags=["save"])
 api_router.include_router(database_router, tags=["database"])
+api_router.include_router(likes_router, tags=["likes"])
+api_router.include_router(custom_titles_router, tags=["custom-titles"])
+api_router.include_router(dictionary_router, tags=["dictionary"])
+api_router.include_router(currency_rates_router, tags=["currency-rates"])
+api_router.include_router(currency_converter_router, prefix="/currency", tags=["currency-converter"])
+api_router.include_router(currency_detector_router, prefix="/currency", tags=["currency-detector"])
 
 __all__ = ["api_router"]

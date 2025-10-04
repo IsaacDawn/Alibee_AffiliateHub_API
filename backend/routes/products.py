@@ -1,31 +1,27 @@
 # backend/routes/products.py
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, HTTPException
 from typing import Optional
 from services.aliexpress import AliExpressService
+import mysql.connector
+from config.settings import settings
 
 router = APIRouter()
 
-@router.get("/products/search")
-def search_products(
-    query: str = Query("", description="Search query"),
-    page: int = Query(1, ge=1),
-    limit: int = Query(20, ge=1, le=100),
-    minPrice: Optional[float] = Query(None, ge=0),
-    maxPrice: Optional[float] = Query(None, ge=0),
-    category: Optional[str] = Query(None),
-    sortBy: Optional[str] = Query("price"),
-    sortOrder: Optional[str] = Query("asc"),
+@router.get("/products/initial")
+def get_initial_products(
+    limit: int = Query(10, ge=1, le=20),
     use_api: str = Query("true")
 ):
-    """Search products endpoint - Uses AliExpress API when use_api=true, otherwise demo products"""
+    """Get initial random products for homepage - Returns 10 products by default"""
     
-    # Use AliExpress API if use_api=true and query is provided
-    if use_api.lower() == "true" and query.strip():
+    # Use AliExpress API if use_api=true
+    if use_api.lower() == "true":
         try:
             aliexpress_service = AliExpressService()
+            # Get popular/trending products for initial load
             result = aliexpress_service.search_products_with_filters(
-                query=query.strip(),
-                page=page,
+                query="electronics",  # Popular category for initial load
+                page=1,
                 page_size=limit,
                 sort="volume_desc"
             )
@@ -34,13 +30,32 @@ def search_products(
                 # Transform AliExpress data to match frontend format
                 transformed_items = []
                 for item in result.get("items", []):
+                    # Extract additional images from AliExpress response
+                    additional_images = []
+                    if item.get("product_small_image_urls"):
+                        if isinstance(item.get("product_small_image_urls"), list):
+                            additional_images = item.get("product_small_image_urls", [])
+                        elif isinstance(item.get("product_small_image_urls"), dict) and "string" in item.get("product_small_image_urls", {}):
+                            additional_images = item.get("product_small_image_urls", {}).get("string", [])
+                    elif item.get("images_link"):
+                        if isinstance(item.get("images_link"), list):
+                            additional_images = item.get("images_link", [])
+                        elif isinstance(item.get("images_link"), dict) and "string" in item.get("images_link", {}):
+                            additional_images = item.get("images_link", {}).get("string", [])
+                    
+                    # Extract video link if available
+                    video_link = item.get("video_link", "")
+                    
                     transformed_item = {
                         "id": item.get("product_id", ""),
                         "title": item.get("product_title", ""),
                         "price": float(item.get("sale_price", 0)),
                         "originalPrice": float(item.get("original_price", 0)) if item.get("original_price") else None,
                         "currency": "USD",
+                        "originalPriceCurrency": item.get("original_price_currency", "USD"),
                         "image": item.get("product_main_image_url", ""),
+                        "images": additional_images,
+                        "video": video_link if video_link else None,
                         "rating": float(item.get("rating", 0)),
                         "reviewCount": int(item.get("review_count", 0)),
                         "url": item.get("product_detail_url", ""),
@@ -56,18 +71,18 @@ def search_products(
                 return {
                     "success": True,
                     "data": transformed_items,
-                    "page": page,
+                    "page": 1,
                     "limit": limit,
                     "hasMore": result.get("hasMore", False),
                     "total": len(transformed_items),
-                    "message": f"Found {len(transformed_items)} products for '{query}'"
+                    "message": f"Found {len(transformed_items)} initial products"
                 }
             else:
-                print(f"AliExpress API failed: {result.get('error', 'Unknown error')}")
+                print(f"AliExpress API failed for initial load: {result.get('error', 'Unknown error')}")
         except Exception as e:
-            print(f"AliExpress API error: {str(e)}")
+            print(f"AliExpress API error for initial load: {str(e)}")
     
-    # Demo products for search (fallback or when use_api=false)
+    # Demo products for initial load (fallback or when use_api=false)
     demo_products = [
         {
             "id": "1005010032093800",
@@ -107,6 +122,471 @@ def search_products(
             "url": "https://example.com/product/1005010032093802",
             "category": "Phone Accessories",
             "discount": 33
+        },
+        {
+            "id": "1005010032093803",
+            "title": "LED Desk Lamp with USB Charging Port",
+            "price": 24.99,
+            "originalPrice": 39.99,
+            "currency": "USD",
+            "image": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300&h=300&fit=crop",
+            "rating": 4.4,
+            "reviewCount": 680,
+            "url": "https://example.com/product/1005010032093803",
+            "category": "Home & Garden",
+            "discount": 37
+        },
+        {
+            "id": "1005010032093804",
+            "title": "Bluetooth Speaker Waterproof",
+            "price": 34.99,
+            "originalPrice": 59.99,
+            "currency": "USD",
+            "image": "https://via.placeholder.com/300x300/EA580C/FFFFFF?text=Speaker",
+            "rating": 4.6,
+            "reviewCount": 1450,
+            "url": "https://example.com/product/1005010032093804",
+            "category": "Electronics",
+            "discount": 42
+        },
+        {
+            "id": "1005010032093805",
+            "title": "Wireless Mouse Ergonomic Design",
+            "price": 15.99,
+            "originalPrice": 25.99,
+            "currency": "USD",
+            "image": "https://via.placeholder.com/300x300/0891B2/FFFFFF?text=Mouse",
+            "rating": 4.2,
+            "reviewCount": 920,
+            "url": "https://example.com/product/1005010032093805",
+            "category": "Computer Accessories",
+            "discount": 38
+        },
+        {
+            "id": "1005010032093806",
+            "title": "Car Phone Mount Dashboard",
+            "price": 12.99,
+            "originalPrice": 19.99,
+            "currency": "USD",
+            "image": "https://via.placeholder.com/300x300/16A34A/FFFFFF?text=Car+Mount",
+            "rating": 4.5,
+            "reviewCount": 1650,
+            "url": "https://example.com/product/1005010032093806",
+            "category": "Automotive",
+            "discount": 35
+        },
+        {
+            "id": "1005010032093807",
+            "title": "Kitchen Scale Digital Display",
+            "price": 18.99,
+            "originalPrice": 28.99,
+            "currency": "USD",
+            "image": "https://via.placeholder.com/300x300/9333EA/FFFFFF?text=Kitchen+Scale",
+            "rating": 4.3,
+            "reviewCount": 750,
+            "url": "https://example.com/product/1005010032093807",
+            "category": "Home & Garden",
+            "discount": 34
+        }
+    ]
+    
+    # Return limited number of products
+    limited_products = demo_products[:limit]
+    
+    return {
+        "success": True,
+        "data": limited_products,
+        "page": 1,
+        "limit": limit,
+        "hasMore": True,  # Always true for demo
+        "total": len(limited_products),
+        "message": f"Loaded {len(limited_products)} initial products"
+    }
+
+@router.get("/products/search")
+def search_products(
+    query: str = Query("", description="Search query"),
+    page: int = Query(1, ge=1),
+    limit: int = Query(10, ge=1, le=20),  # Changed default to 10 for lazy loading
+    minPrice: Optional[float] = Query(None, ge=0),
+    maxPrice: Optional[float] = Query(None, ge=0),
+    category: Optional[str] = Query(None),
+    sortBy: Optional[str] = Query("price"),
+    sortOrder: Optional[str] = Query("asc"),
+    hasVideo: Optional[bool] = Query(None, description="Filter products with video"),
+    use_api: str = Query("true")
+):
+    """Search products endpoint - Uses AliExpress API when use_api=true, otherwise demo products"""
+    
+    # Use AliExpress API if use_api=true and query is provided
+    if use_api.lower() == "true" and query.strip():
+        try:
+            aliexpress_service = AliExpressService()
+            
+            # If hasVideo filter is active, we need to fetch more products to ensure we get enough with videos
+            if hasVideo:
+                # Fetch more products per page to increase chances of getting products with videos
+                fetch_limit = limit * 3  # Fetch 3x more to filter for videos
+                max_pages_to_check = 5  # Check up to 5 pages to find enough products with videos
+                
+                all_transformed_items = []
+                current_page = page
+                products_with_videos = 0
+                
+                # Keep fetching until we have enough products with videos or reach max pages
+                while products_with_videos < limit and current_page <= page + max_pages_to_check - 1:
+                    result = aliexpress_service.search_products_with_filters(
+                        query=query.strip(),
+                        page=current_page,
+                        page_size=fetch_limit,
+                        sort="volume_desc",
+                        has_video=None  # Don't filter at API level, we'll filter client-side
+                    )
+                    
+                    if result and result.get("items"):
+                        # Transform AliExpress data to match frontend format
+                        for item in result.get("items", []):
+                            # Extract additional images from AliExpress response
+                            additional_images = []
+                            if item.get("product_small_image_urls"):
+                                if isinstance(item.get("product_small_image_urls"), list):
+                                    additional_images = item.get("product_small_image_urls", [])
+                                elif isinstance(item.get("product_small_image_urls"), dict) and "string" in item.get("product_small_image_urls", {}):
+                                    additional_images = item.get("product_small_image_urls", {}).get("string", [])
+                            elif item.get("images_link"):
+                                if isinstance(item.get("images_link"), list):
+                                    additional_images = item.get("images_link", [])
+                                elif isinstance(item.get("images_link"), dict) and "string" in item.get("images_link", {}):
+                                    additional_images = item.get("images_link", {}).get("string", [])
+                            
+                            # Extract video link if available
+                            video_link = item.get("video_link", "")
+                            
+                            # Only include products that have videos
+                            if video_link and video_link.strip():
+                                transformed_item = {
+                                    "id": item.get("product_id", ""),
+                                    "title": item.get("product_title", ""),
+                                    "price": float(item.get("sale_price", 0)),
+                                    "originalPrice": float(item.get("original_price", 0)) if item.get("original_price") else None,
+                                    "currency": "USD",
+                                    "originalPriceCurrency": item.get("original_price_currency", "USD"),
+                                    "image": item.get("product_main_image_url", ""),
+                                    "images": additional_images,
+                                    "video": video_link,
+                                    "rating": float(item.get("rating", 0)),
+                                    "reviewCount": int(item.get("review_count", 0)),
+                                    "url": item.get("product_detail_url", ""),
+                                    "category": item.get("category", ""),
+                                    "discount": None
+                                }
+                                # Calculate discount if original price exists
+                                if transformed_item["originalPrice"] and transformed_item["originalPrice"] > transformed_item["price"]:
+                                    discount = ((transformed_item["originalPrice"] - transformed_item["price"]) / transformed_item["originalPrice"]) * 100
+                                    transformed_item["discount"] = round(discount)
+                                
+                                all_transformed_items.append(transformed_item)
+                                products_with_videos += 1
+                                
+                                # Stop if we have enough products with videos
+                                if products_with_videos >= limit:
+                                    break
+                    
+                    # If we didn't get enough products with videos, try next page
+                    if products_with_videos < limit:
+                        current_page += 1
+                        # Check if we've reached the end of available pages
+                        if not result or not result.get("hasMore", False):
+                            break
+                
+                # Return only the requested number of products with videos
+                final_items = all_transformed_items[:limit]
+                
+                return {
+                    "success": True,
+                    "data": final_items,
+                    "page": page,
+                    "limit": limit,
+                    "hasMore": len(final_items) == limit and current_page <= page + max_pages_to_check,
+                    "total": len(final_items),
+                    "message": f"Found {len(final_items)} products with videos for '{query}' (checked {current_page - page + 1} pages)"
+                }
+            else:
+                # Regular search without video filtering
+                result = aliexpress_service.search_products_with_filters(
+                    query=query.strip(),
+                    page=page,
+                    page_size=limit,
+                    sort="volume_desc",
+                    has_video=hasVideo
+                )
+                
+                if result and result.get("items"):
+                    # Transform AliExpress data to match frontend format
+                    transformed_items = []
+                    for item in result.get("items", []):
+                        # Extract additional images from AliExpress response
+                        additional_images = []
+                        if item.get("product_small_image_urls"):
+                            if isinstance(item.get("product_small_image_urls"), list):
+                                additional_images = item.get("product_small_image_urls", [])
+                            elif isinstance(item.get("product_small_image_urls"), dict) and "string" in item.get("product_small_image_urls", {}):
+                                additional_images = item.get("product_small_image_urls", {}).get("string", [])
+                        elif item.get("images_link"):
+                            if isinstance(item.get("images_link"), list):
+                                additional_images = item.get("images_link", [])
+                            elif isinstance(item.get("images_link"), dict) and "string" in item.get("images_link", {}):
+                                additional_images = item.get("images_link", {}).get("string", [])
+                        
+                        # Extract video link if available
+                        video_link = item.get("video_link", "")
+                        
+                        transformed_item = {
+                            "id": item.get("product_id", ""),
+                            "title": item.get("product_title", ""),
+                            "price": float(item.get("sale_price", 0)),
+                            "originalPrice": float(item.get("original_price", 0)) if item.get("original_price") else None,
+                            "currency": "USD",
+                            "originalPriceCurrency": item.get("original_price_currency", "USD"),
+                            "image": item.get("product_main_image_url", ""),
+                            "images": additional_images,
+                            "video": video_link if video_link else None,
+                            "rating": float(item.get("rating", 0)),
+                            "reviewCount": int(item.get("review_count", 0)),
+                            "url": item.get("product_detail_url", ""),
+                            "category": item.get("category", ""),
+                            "discount": None
+                        }
+                        # Calculate discount if original price exists
+                        if transformed_item["originalPrice"] and transformed_item["originalPrice"] > transformed_item["price"]:
+                            discount = ((transformed_item["originalPrice"] - transformed_item["price"]) / transformed_item["originalPrice"]) * 100
+                            transformed_item["discount"] = round(discount)
+                        transformed_items.append(transformed_item)
+                    
+                    return {
+                        "success": True,
+                        "data": transformed_items,
+                        "page": page,
+                        "limit": limit,
+                        "hasMore": result.get("hasMore", False),
+                        "total": len(transformed_items),
+                        "message": f"Found {len(transformed_items)} products for '{query}'"
+                    }
+                else:
+                    print(f"AliExpress API failed: {result.get('error', 'Unknown error')}")
+        except Exception as e:
+            print(f"AliExpress API error: {str(e)}")
+    
+    # Demo products for search (fallback or when use_api=false)
+    demo_products = [
+        {
+            "id": "1005010032093800",
+            "title": "Wireless Bluetooth Headphones - Premium Quality",
+            "price": 29.99,
+            "originalPrice": 49.99,
+            "currency": "USD",
+            "image": "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=300&h=300&fit=crop",
+            "rating": 4.5,
+            "reviewCount": 1250,
+            "url": "https://example.com/product/1005010032093800",
+            "category": "Electronics",
+            "discount": 40,
+            "video": "https://sample-videos.com/zip/10/mp4/SampleVideo_1280x720_1mb.mp4"
+        },
+        {
+            "id": "1005010032093801",
+            "title": "Smart Watch with Fitness Tracking",
+            "price": 89.99,
+            "originalPrice": 129.99,
+            "currency": "USD",
+            "image": "https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=300&h=300&fit=crop",
+            "rating": 4.3,
+            "reviewCount": 890,
+            "url": "https://example.com/product/1005010032093801",
+            "category": "Watches",
+            "discount": 31
+        },
+        {
+            "id": "1005010032093802",
+            "title": "Portable Phone Charger 20000mAh",
+            "price": 19.99,
+            "originalPrice": 29.99,
+            "currency": "USD",
+            "image": "https://images.unsplash.com/photo-1609592807909-0a1b0a4a0b0b?w=300&h=300&fit=crop",
+            "rating": 4.7,
+            "reviewCount": 2100,
+            "url": "https://example.com/product/1005010032093802",
+            "category": "Phone Accessories",
+            "discount": 33
+        },
+        {
+            "id": "1005010032093803",
+            "title": "LED Desk Lamp with USB Charging Port",
+            "price": 24.99,
+            "originalPrice": 39.99,
+            "currency": "USD",
+            "image": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300&h=300&fit=crop",
+            "rating": 4.4,
+            "reviewCount": 680,
+            "url": "https://example.com/product/1005010032093803",
+            "category": "Home & Garden",
+            "discount": 37
+        },
+        {
+            "id": "1005010032093804",
+            "title": "Bluetooth Speaker Waterproof",
+            "price": 34.99,
+            "originalPrice": 59.99,
+            "currency": "USD",
+            "image": "https://via.placeholder.com/300x300/EA580C/FFFFFF?text=Speaker",
+            "rating": 4.6,
+            "reviewCount": 1450,
+            "url": "https://example.com/product/1005010032093804",
+            "category": "Electronics",
+            "discount": 42
+        },
+        {
+            "id": "1005010032093805",
+            "title": "Wireless Mouse Ergonomic Design",
+            "price": 15.99,
+            "originalPrice": 25.99,
+            "currency": "USD",
+            "image": "https://via.placeholder.com/300x300/0891B2/FFFFFF?text=Mouse",
+            "rating": 4.2,
+            "reviewCount": 920,
+            "url": "https://example.com/product/1005010032093805",
+            "category": "Computer Accessories",
+            "discount": 38
+        },
+        {
+            "id": "1005010032093806",
+            "title": "Car Phone Mount Dashboard",
+            "price": 12.99,
+            "originalPrice": 19.99,
+            "currency": "USD",
+            "image": "https://via.placeholder.com/300x300/16A34A/FFFFFF?text=Car+Mount",
+            "rating": 4.5,
+            "reviewCount": 1650,
+            "url": "https://example.com/product/1005010032093806",
+            "category": "Automotive",
+            "discount": 35
+        },
+        {
+            "id": "1005010032093807",
+            "title": "Kitchen Scale Digital Display",
+            "price": 18.99,
+            "originalPrice": 28.99,
+            "currency": "USD",
+            "image": "https://via.placeholder.com/300x300/9333EA/FFFFFF?text=Kitchen+Scale",
+            "rating": 4.3,
+            "reviewCount": 750,
+            "url": "https://example.com/product/1005010032093807",
+            "category": "Home & Garden",
+            "discount": 34
+        },
+        {
+            "id": "1005010032093808",
+            "title": "Gaming Mechanical Keyboard RGB",
+            "price": 79.99,
+            "originalPrice": 119.99,
+            "currency": "USD",
+            "image": "https://via.placeholder.com/300x300/DC2626/FFFFFF?text=Gaming+Keyboard",
+            "rating": 4.8,
+            "reviewCount": 2100,
+            "url": "https://example.com/product/1005010032093808",
+            "category": "Gaming",
+            "discount": 33
+        },
+        {
+            "id": "1005010032093809",
+            "title": "Wireless Gaming Mouse 16000 DPI",
+            "price": 45.99,
+            "originalPrice": 69.99,
+            "currency": "USD",
+            "image": "https://via.placeholder.com/300x300/7C3AED/FFFFFF?text=Gaming+Mouse",
+            "rating": 4.6,
+            "reviewCount": 1800,
+            "url": "https://example.com/product/1005010032093809",
+            "category": "Gaming",
+            "discount": 34
+        },
+        {
+            "id": "1005010032093810",
+            "title": "USB-C Hub 7-in-1 Adapter",
+            "price": 32.99,
+            "originalPrice": 49.99,
+            "currency": "USD",
+            "image": "https://via.placeholder.com/300x300/059669/FFFFFF?text=USB+Hub",
+            "rating": 4.4,
+            "reviewCount": 950,
+            "url": "https://example.com/product/1005010032093810",
+            "category": "Computer Accessories",
+            "discount": 34
+        },
+        {
+            "id": "1005010032093811",
+            "title": "Wireless Earbuds Noise Cancelling",
+            "price": 59.99,
+            "originalPrice": 89.99,
+            "currency": "USD",
+            "image": "https://via.placeholder.com/300x300/EA580C/FFFFFF?text=Wireless+Earbuds",
+            "rating": 4.5,
+            "reviewCount": 1350,
+            "url": "https://example.com/product/1005010032093811",
+            "category": "Electronics",
+            "discount": 33
+        },
+        {
+            "id": "1005010032093812",
+            "title": "Laptop Stand Adjustable Aluminum",
+            "price": 25.99,
+            "originalPrice": 39.99,
+            "currency": "USD",
+            "image": "https://via.placeholder.com/300x300/0891B2/FFFFFF?text=Laptop+Stand",
+            "rating": 4.3,
+            "reviewCount": 720,
+            "url": "https://example.com/product/1005010032093812",
+            "category": "Computer Accessories",
+            "discount": 35
+        },
+        {
+            "id": "1005010032093813",
+            "title": "Phone Case Clear Transparent",
+            "price": 8.99,
+            "originalPrice": 14.99,
+            "currency": "USD",
+            "image": "https://via.placeholder.com/300x300/16A34A/FFFFFF?text=Phone+Case",
+            "rating": 4.2,
+            "reviewCount": 2100,
+            "url": "https://example.com/product/1005010032093813",
+            "category": "Phone Accessories",
+            "discount": 40
+        },
+        {
+            "id": "1005010032093814",
+            "title": "Tablet Stand Foldable Portable",
+            "price": 16.99,
+            "originalPrice": 24.99,
+            "currency": "USD",
+            "image": "https://via.placeholder.com/300x300/9333EA/FFFFFF?text=Tablet+Stand",
+            "rating": 4.4,
+            "reviewCount": 680,
+            "url": "https://example.com/product/1005010032093814",
+            "category": "Tablet Accessories",
+            "discount": 32
+        },
+        {
+            "id": "1005010032093815",
+            "title": "Webcam HD 1080p with Microphone",
+            "price": 39.99,
+            "originalPrice": 59.99,
+            "currency": "USD",
+            "image": "https://via.placeholder.com/300x300/DC2626/FFFFFF?text=Webcam",
+            "rating": 4.5,
+            "reviewCount": 1100,
+            "url": "https://example.com/product/1005010032093815",
+            "category": "Computer Accessories",
+            "discount": 33
         }
     ]
     
@@ -116,17 +596,55 @@ def search_products(
     else:
         filtered_products = demo_products
     
+    # Filter by video if specified
+    if hasVideo is not None:
+        if hasVideo:
+            # For demo purposes, simulate video availability based on product ID
+            # Products with even IDs have videos, odd IDs don't
+            filtered_products = [p for p in filtered_products if int(p["id"]) % 2 == 0]
+            
+            # If we don't have enough products with videos, we need to simulate fetching more pages
+            if len(filtered_products) < limit:
+                # Simulate additional products with videos by creating more demo products
+                additional_products = []
+                for i in range(limit - len(filtered_products)):
+                    additional_id = f"1005010032093{800 + len(filtered_products) + i}"
+                    additional_product = {
+                        "id": additional_id,
+                        "title": f"Demo Product with Video {len(filtered_products) + i + 1}",
+                        "price": 29.99 + (i * 5),
+                        "originalPrice": 49.99 + (i * 5),
+                        "currency": "USD",
+                        "image": f"https://via.placeholder.com/300x300/4F46E5/FFFFFF?text=Video+Product+{i+1}",
+                        "rating": 4.5,
+                        "reviewCount": 1250 + (i * 100),
+                        "url": f"https://example.com/product/{additional_id}",
+                        "category": "Electronics",
+                        "discount": 40,
+                        "video": f"https://sample-videos.com/zip/10/mp4/SampleVideo_1280x720_1mb.mp4"
+                    }
+                    additional_products.append(additional_product)
+                
+                filtered_products.extend(additional_products)
+        else:
+            # Filter out products with videos
+            filtered_products = [p for p in filtered_products if int(p["id"]) % 2 != 0]
+    
     # Calculate pagination
     start_index = (page - 1) * limit
     end_index = start_index + limit
     paginated_products = filtered_products[start_index:end_index]
+    
+    # For demo purposes, always return hasMore=true when no query is provided
+    # This allows infinite scrolling to work with demo data
+    has_more = end_index < len(filtered_products) if query.strip() else True
     
     return {
         "success": True,
         "data": paginated_products,
         "page": page,
         "limit": limit,
-        "hasMore": end_index < len(filtered_products),
+        "hasMore": has_more,
         "total": len(filtered_products),
         "message": f"Found {len(paginated_products)} products for '{query}'" if query.strip() else "Demo products loaded"
     }
@@ -134,7 +652,7 @@ def search_products(
 @router.get("/products")
 def list_products(
     page: int = Query(1, ge=1),
-    pageSize: int = Query(20, ge=1, le=100),
+    pageSize: int = Query(10, ge=1, le=100),
     use_api: str = Query("true")
 ):
     """List products endpoint - Uses AliExpress API when use_api=true, otherwise demo products"""
@@ -156,7 +674,7 @@ def list_products(
                     "items": result.get("items", []),
                     "page": page,
                     "pageSize": pageSize,
-                    "hasMore": result.get("hasMore", False),
+                    "hasMore": True,  # Always return True for testing infinite scroll
                     "total": len(result.get("items", [])),
                     "message": f"Found {len(result.get('items', []))} hot products from AliExpress API"
                 }
@@ -207,6 +725,7 @@ def list_products(
                 "https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=300&h=300&fit=crop",
                 "https://images.unsplash.com/photo-1434493789847-2f02dc6ca35d?w=300&h=300&fit=crop"
             ],
+            "video_link": "https://sample-videos.com/zip/10/mp4/SampleVideo_1280x720_1mb.mp4",
             "volume": 3200,
             "category": "Watches",
             "is_saved": False
@@ -401,3 +920,165 @@ def get_product_by_id(
         "source": "demo_data",
         "message": f"Demo product {product_id} loaded successfully"
     }
+
+@router.put("/products/{product_id}/custom-title")
+def save_custom_title(
+    product_id: str,
+    custom_title: str = Query(..., description="Custom product title")
+):
+    """Save custom title for a product - only if product exists in saved_products table"""
+    
+    if not custom_title.strip():
+        raise HTTPException(status_code=400, detail="Custom title cannot be empty")
+    
+    if len(custom_title.strip()) > 500:
+        raise HTTPException(status_code=400, detail="Custom title too long (max 500 characters)")
+    
+    try:
+        connection = mysql.connector.connect(**settings.get_database_config())
+        cursor = connection.cursor()
+        
+        # Check if product exists in saved_products table
+        cursor.execute("SELECT product_id FROM saved_products WHERE product_id = %s", (product_id,))
+        existing_product = cursor.fetchone()
+        
+        if existing_product:
+            # Update existing product's custom title
+            cursor.execute(
+                "UPDATE saved_products SET custom_title = %s, updated_at = CURRENT_TIMESTAMP WHERE product_id = %s",
+                (custom_title.strip(), product_id)
+            )
+            connection.commit()
+            cursor.close()
+            connection.close()
+            
+            return {
+                "success": True,
+                "product_id": product_id,
+                "custom_title": custom_title.strip(),
+                "message": f"Custom title updated successfully for product {product_id}"
+            }
+        else:
+            # Product not found in saved_products table
+            cursor.close()
+            connection.close()
+            
+            return {
+                "success": False,
+                "product_id": product_id,
+                "error": "Product not found in saved_products table",
+                "message": f"Product {product_id} is not saved, cannot update custom title"
+            }
+        
+    except mysql.connector.Error as e:
+        return {
+            "success": False,
+            "product_id": product_id,
+            "error": f"Database error: {str(e)}",
+            "message": "Failed to save custom title"
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "product_id": product_id,
+            "error": f"Unexpected error: {str(e)}",
+            "message": "Failed to save custom title"
+        }
+
+@router.get("/products/{product_id}/custom-title")
+def get_custom_title(product_id: str):
+    """Get custom title for a product from saved_products table"""
+    
+    try:
+        connection = mysql.connector.connect(**settings.get_database_config())
+        cursor = connection.cursor()
+        
+        cursor.execute("SELECT custom_title FROM saved_products WHERE product_id = %s", (product_id,))
+        result = cursor.fetchone()
+        
+        cursor.close()
+        connection.close()
+        
+        if result and result[0]:
+            return {
+                "success": True,
+                "product_id": product_id,
+                "custom_title": result[0],
+                "message": f"Custom title found for product {product_id}"
+            }
+        else:
+            return {
+                "success": True,
+                "product_id": product_id,
+                "custom_title": None,
+                "message": f"No custom title found for product {product_id}"
+            }
+        
+    except mysql.connector.Error as e:
+        return {
+            "success": False,
+            "product_id": product_id,
+            "error": f"Database error: {str(e)}",
+            "message": "Failed to get custom title"
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "product_id": product_id,
+            "error": f"Unexpected error: {str(e)}",
+            "message": "Failed to get custom title"
+        }
+
+@router.post("/products/batch/custom-titles")
+def get_batch_custom_titles(product_ids: list[str]):
+    """Get custom titles for multiple products at once"""
+    
+    if not product_ids or len(product_ids) == 0:
+        return {
+            "success": True,
+            "custom_titles": {},
+            "message": "No product IDs provided"
+        }
+    
+    try:
+        connection = mysql.connector.connect(**settings.get_database_config())
+        cursor = connection.cursor()
+        
+        # Create placeholders for the IN clause
+        placeholders = ','.join(['%s' for _ in product_ids])
+        query = f"SELECT product_id, custom_title FROM saved_products WHERE product_id IN ({placeholders})"
+        
+        cursor.execute(query, product_ids)
+        results = cursor.fetchall()
+        
+        cursor.close()
+        connection.close()
+        
+        # Build response object
+        custom_titles = {}
+        for row in results:
+            product_id, custom_title = row
+            if custom_title and custom_title.strip() != '':
+                custom_titles[product_id] = custom_title.strip()
+        
+        return {
+            "success": True,
+            "custom_titles": custom_titles,
+            "total_found": len(custom_titles),
+            "message": f"Found {len(custom_titles)} custom titles out of {len(product_ids)} products"
+        }
+        
+    except mysql.connector.Error as e:
+        return {
+            "success": False,
+            "custom_titles": {},
+            "error": f"Database error: {str(e)}",
+            "message": "Failed to get batch custom titles"
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "custom_titles": {},
+            "error": f"Unexpected error: {str(e)}",
+            "message": "Failed to get batch custom titles"
+        }

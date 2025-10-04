@@ -424,7 +424,7 @@ class AliExpressService:
             'items': items,
             'page': page,
             'pageSize': page_size,
-            'hasMore': len(items) >= page_size,
+            'hasMore': len(items) > 0,  # Always return True if we have items (for testing infinite scroll)
             'method': 'aliexpress.affiliate.product.query' if not hot else 'aliexpress.affiliate.hotproduct.query',
             'source': 'aliexpress_api'
         }
