@@ -1,0 +1,64 @@
+{
+  "success": true,
+  "data": [
+    {
+      "product_id": "1005010032093800",
+      "title": "Wireless Bluetooth Headphones - Premium Quality",
+      "sale_price": 25.50,
+      "sale_price_currency": "EUR",
+      "original_price": 42.50,
+      "original_price_currency": "EUR",
+      "rating": 4.5,
+      "review_count": 1250,
+      "image_url": "https://via.placeholder.com/300x300/4F46E5/FFFFFF?text=Headphones",
+      "product_main_image_url": "https://via.placeholder.com/300x300/4F46E5/FFFFFF?text=Headphones",
+      "images_link": ["https://via.placeholder.com/300x300/4F46E5/FFFFFF?text=Headphones"],
+      "product_small_image_urls": ["https://via.placeholder.com/300x300/4F46E5/FFFFFF?text=Headphones"],
+      "volume": 5000,
+      "category": "Electronics",
+      "is_saved": false,
+      "currency_conversion_info": {
+        "original_currency": "USD",
+        "target_currency": "EUR",
+        "converted": true
+      }
+    },
+    {
+      "product_id": "1005010032093801",
+      "title": "Smart Watch with Health Monitoring",
+      "sale_price": 68.00,
+      "sale_price_currency": "EUR",
+      "original_price": 85.00,
+      "original_price_currency": "EUR",
+      "rating": 4.3,
+      "review_count": 890,
+      "image_url": "https://via.placeholder.com/300x300/10B981/FFFFFF?text=Smart+Watch",
+      "product_main_image_url": "https://via.placeholder.com/300x300/10B981/FFFFFF?text=Smart+Watch",
+      "images_link": ["https://via.placeholder.com/300x300/10B981/FFFFFF?text=Smart+Watch"],
+      "product_small_image_urls": ["https://via.placeholder.com/300x300/10B981/FFFFFF?text=Smart+Watch"],
+      "volume": 3200,
+      "category": "Electronics",
+      "is_saved": false,
+      "currency_conversion_info": {
+        "original_currency": "USD",
+        "target_currency": "EUR",
+        "converted": true
+      }
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "limit": 150,
+    "pageSize": 150,
+    "total": 2,
+    "hasMore": false
+  },
+  "currency_conversion": {
+    "total_products": 2,
+    "successful_conversions": 4,
+    "failed_conversions": 0,
+    "target_currency": "EUR",
+    "conversion_errors": []
+  },
+  "message": "Found 2 products from AliExpress API with currency conversion to EUR"
+}

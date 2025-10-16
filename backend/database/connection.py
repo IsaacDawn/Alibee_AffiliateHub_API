@@ -1,5 +1,5 @@
 # backend/database/connection.py
-import sqlite3
+import mysql.connector
 from typing import Dict, Any, List, Optional, Tuple
 from contextlib import contextmanager
 from config.settings import settings
@@ -11,61 +11,60 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class DatabaseConnection:
-    """Database connection manager with SQLite"""
+    """Database connection manager with MySQL"""
     
     def __init__(self):
-        self.db_path = "alibee_local.db"
+        self.config = settings.get_database_config()
         self._initialize_database()
     
     def _initialize_database(self):
-        """Initialize SQLite database"""
+        """Initialize MySQL database"""
         try:
-            # Create database file if it doesn't exist
-            if not os.path.exists(self.db_path):
-                with sqlite3.connect(self.db_path) as conn:
-                    # Create saved_products table
-                    conn.execute("""
-                        CREATE TABLE IF NOT EXISTS saved_products (
-                            id INTEGER PRIMARY KEY AUTOINCREMENT,
-                            product_id TEXT UNIQUE NOT NULL,
-                            product_title TEXT,
-                            promotion_link TEXT,
-                            product_category TEXT,
-                            custom_title TEXT,
-                            has_video BOOLEAN DEFAULT 0,
-                            saved_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                        )
-                    """)
-                    
-                    # Create currency_rate table
-                    conn.execute("""
-                        CREATE TABLE IF NOT EXISTS currency_rate (
-                            id INTEGER PRIMARY KEY AUTOINCREMENT,
-                            from_currency TEXT NOT NULL,
-                            to_currency TEXT NOT NULL,
-                            rate REAL NOT NULL,
-                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                            UNIQUE(from_currency, to_currency)
-                        )
-                    """)
-                    conn.commit()
-                logger.info("SQLite database initialized successfully")
-            else:
-                logger.info("SQLite database already exists")
+            with mysql.connector.connect(**self.config) as conn:
+                cursor = conn.cursor()
+                
+                # Create saved_products table
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS saved_products (
+                        id INT AUTO_INCREMENT PRIMARY KEY,
+                        product_id VARCHAR(255) UNIQUE NOT NULL,
+                        product_title TEXT,
+                        promotion_link TEXT,
+                        product_category TEXT,
+                        custom_title TEXT,
+                        has_video BOOLEAN DEFAULT FALSE,
+                        saved_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+                """)
+                
+                # Create currency_rate table
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS currency_rate (
+                        id INT AUTO_INCREMENT PRIMARY KEY,
+                        from_currency VARCHAR(10) NOT NULL,
+                        to_currency VARCHAR(10) NOT NULL,
+                        rate DECIMAL(20,8) NOT NULL,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                        UNIQUE KEY unique_currency_pair (from_currency, to_currency)
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+                """)
+                
+                conn.commit()
+                cursor.close()
+                logger.info("MySQL database initialized successfully")
                 
         except Exception as e:
-            logger.error(f"Failed to initialize SQLite database: {e}")
+            logger.error(f"Failed to initialize MySQL database: {e}")
     
     @contextmanager
     def get_connection(self):
-        """Get SQLite database connection with context manager"""
+        """Get MySQL database connection with context manager"""
         connection = None
         try:
-            connection = sqlite3.connect(self.db_path)
-            connection.row_factory = sqlite3.Row
+            connection = mysql.connector.connect(**self.config)
             yield connection
         except Exception as e:
             if connection:
@@ -80,7 +79,7 @@ class DatabaseConnection:
     def get_cursor(self, dictionary: bool = False):
         """Get database cursor with context manager"""
         with self.get_connection() as connection:
-            cursor = connection.cursor()
+            cursor = connection.cursor(dictionary=dictionary)
             try:
                 yield cursor, connection
             finally:
@@ -97,20 +96,20 @@ class DatabaseOperations:
         try:
             with self.db.get_cursor() as (cursor, connection):
                 # Check if product already exists
-                cursor.execute("SELECT product_id FROM saved_products WHERE product_id = ?", (product_data['product_id'],))
+                cursor.execute("SELECT product_id FROM saved_products WHERE product_id = %s", (product_data['product_id'],))
                 existing = cursor.fetchone()
                 
                 if existing:
                     # Update existing product
                     update_query = """
                         UPDATE saved_products SET
-                            product_title = ?,
-                            promotion_link = ?,
-                            product_category = ?,
-                            custom_title = ?,
-                            has_video = ?,
+                            product_title = %s,
+                            promotion_link = %s,
+                            product_category = %s,
+                            custom_title = %s,
+                            has_video = %s,
                             updated_at = CURRENT_TIMESTAMP
-                        WHERE product_id = ?
+                        WHERE product_id = %s
                     """
                     cursor.execute(update_query, (
                         product_data.get('product_title'),
@@ -126,7 +125,7 @@ class DatabaseOperations:
                         INSERT INTO saved_products (
                             product_id, product_title, promotion_link, product_category, custom_title, has_video,
                             saved_at, created_at, updated_at
-                        ) VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                        ) VALUES (%s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
                     """
                     cursor.execute(insert_query, (
                         product_data['product_id'],
@@ -147,7 +146,7 @@ class DatabaseOperations:
         """Remove a product from saved products"""
         try:
             with self.db.get_cursor() as (cursor, connection):
-                cursor.execute("DELETE FROM saved_products WHERE product_id = ?", (product_id,))
+                cursor.execute("DELETE FROM saved_products WHERE product_id = %s", (product_id,))
                 connection.commit()
                 return cursor.rowcount > 0
         except Exception as e:
@@ -159,7 +158,7 @@ class DatabaseOperations:
         try:
             with self.db.get_cursor() as (cursor, connection):
                 cursor.execute(
-                    "UPDATE saved_products SET custom_title = ?, updated_at = CURRENT_TIMESTAMP WHERE product_id = ?",
+                    "UPDATE saved_products SET custom_title = %s, updated_at = CURRENT_TIMESTAMP WHERE product_id = %s",
                     (new_title, product_id)
                 )
                 connection.commit()
@@ -177,7 +176,7 @@ class DatabaseOperations:
                 params = []
                 
                 if search_query:
-                    where_conditions.append("(product_title LIKE ? OR custom_title LIKE ?)")
+                    where_conditions.append("(product_title LIKE %s OR custom_title LIKE %s)")
                     params.extend([f"%{search_query}%", f"%{search_query}%"])
                 
                 order_clause = {
@@ -276,7 +275,7 @@ class DatabaseOperations:
         try:
             with self.db.get_cursor() as (cursor, connection):
                 cursor.execute(
-                    "SELECT rate FROM currency_rate WHERE from_currency = ? AND to_currency = ?",
+                    "SELECT rate FROM currency_rate WHERE from_currency = %s AND to_currency = %s",
                     (from_currency, to_currency)
                 )
                 result = cursor.fetchone()
@@ -291,7 +290,7 @@ class DatabaseOperations:
             with self.db.get_cursor() as (cursor, connection):
                 # Check if rate already exists
                 cursor.execute(
-                    "SELECT id FROM currency_rate WHERE from_currency = ? AND to_currency = ?",
+                    "SELECT id FROM currency_rate WHERE from_currency = %s AND to_currency = %s",
                     (from_currency, to_currency)
                 )
                 existing = cursor.fetchone()
@@ -299,13 +298,13 @@ class DatabaseOperations:
                 if existing:
                     # Update existing rate
                     cursor.execute(
-                        "UPDATE currency_rate SET rate = ?, updated_at = CURRENT_TIMESTAMP WHERE from_currency = ? AND to_currency = ?",
+                        "UPDATE currency_rate SET rate = %s, updated_at = CURRENT_TIMESTAMP WHERE from_currency = %s AND to_currency = %s",
                         (rate, from_currency, to_currency)
                     )
                 else:
                     # Insert new rate
                     cursor.execute(
-                        "INSERT INTO currency_rate (from_currency, to_currency, rate, created_at, updated_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+                        "INSERT INTO currency_rate (from_currency, to_currency, rate, created_at, updated_at) VALUES (%s, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
                         (from_currency, to_currency, rate)
                     )
                 
@@ -341,7 +340,7 @@ class DatabaseOperations:
         try:
             with self.db.get_cursor() as (cursor, connection):
                 cursor.execute(
-                    "DELETE FROM currency_rate WHERE from_currency = ? AND to_currency = ?",
+                    "DELETE FROM currency_rate WHERE from_currency = %s AND to_currency = %s",
                     (from_currency, to_currency)
                 )
                 connection.commit()
@@ -355,5 +354,5 @@ db_ops = DatabaseOperations()
 
 # Simple function for API endpoints to get database connection
 def get_db_connection():
-    """Get SQLite database connection for API endpoints"""
-    return sqlite3.connect("alibee_local.db")
+    """Get MySQL database connection for API endpoints"""
+    return mysql.connector.connect(**settings.get_database_config())

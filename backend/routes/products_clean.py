@@ -10,28 +10,6 @@ import logging
 
 router = APIRouter()
 
-def _safe_float(value):
-    """Safely convert value to float, handling null/None/empty values as 0"""
-    try:
-        if value is None or value == '' or str(value).lower() in ['null', 'none']:
-            return 0.0
-        return float(value)
-    except (ValueError, TypeError):
-        return 0.0
-
-def _calculate_discount_percentage(product):
-    """Calculate discount percentage for a product"""
-    try:
-        original_price = product.get("originalPrice") or product.get("original_price")
-        sale_price = product.get("price") or product.get("sale_price")
-        
-        if original_price and sale_price and original_price > 0 and sale_price < original_price:
-            discount = ((original_price - sale_price) / original_price) * 100
-            return round(discount, 2)
-        return 0.0
-    except (ValueError, TypeError, ZeroDivisionError):
-        return 0.0
-
 def get_custom_titles_for_products(products: List[Dict[str, Any]]) -> Dict[str, str]:
     """Get custom titles for products from saved_products table"""
     try:
@@ -179,8 +157,6 @@ def get_initial_products(
             "currency": "USD",
             "image": "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=300&h=300&fit=crop",
             "rating": 4.5,
-        "product_score_stars": 4.5,
-            "product_score_stars": 4.5,
             "reviewCount": 1250,
             "url": "https://example.com/product/1005010032093800",
             "category": "Electronics",
@@ -195,7 +171,6 @@ def get_initial_products(
             "currency": "USD",
             "image": "https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=300&h=300&fit=crop",
             "rating": 4.3,
-            "product_score_stars": 4.3,
             "reviewCount": 890,
             "url": "https://example.com/product/1005010032093801",
             "category": "Watches",
@@ -245,23 +220,12 @@ def search_products(
         try:
             aliexpress_service = AliExpressService()
             
-            # Determine sort parameter for AliExpress API
-            sort_param = "volume_desc"  # Default
-            if sortBy == "price":
-                sort_param = "price_asc" if sortOrder == "asc" else "price_desc"
-            elif sortBy == "rating":
-                sort_param = "rating_asc" if sortOrder == "asc" else "rating_desc"
-            elif sortBy == "volume":
-                sort_param = "volume_asc" if sortOrder == "asc" else "volume_desc"
-            elif sortBy == "discount":
-                sort_param = "discount_asc" if sortOrder == "asc" else "discount_desc"
-            
             # Use AliExpress API with video filter if needed
             result = aliexpress_service.search_products_with_filters(
                 query=query.strip(),
                 page=page,
                 page_size=limit,
-                sort=sort_param,
+                sort="volume_desc",
                 has_video=(only_with_video == 1)
             )
             
@@ -335,8 +299,6 @@ def search_products(
             "currency": "USD",
             "originalPriceCurrency": "USD",
             "rating": 4.5,
-        "product_score_stars": 4.5,
-            "product_score_stars": 4.5,
             "reviewCount": 1250,
             "image": "https://via.placeholder.com/300x300/4F46E5/FFFFFF?text=Headphones",
             "images": ["https://via.placeholder.com/300x300/4F46E5/FFFFFF?text=Headphones"],
@@ -354,7 +316,6 @@ def search_products(
             "currency": "USD",
             "originalPriceCurrency": "USD",
             "rating": 4.3,
-            "product_score_stars": 4.3,
             "reviewCount": 890,
             "image": "https://via.placeholder.com/300x300/059669/FFFFFF?text=Smart+Watch",
             "images": ["https://via.placeholder.com/300x300/059669/FFFFFF?text=Smart+Watch"],
@@ -375,28 +336,6 @@ def search_products(
         filtered_products = [p for p in demo_products if query.lower() in p["title"].lower()]
     else:
         filtered_products = demo_products
-    
-    # Apply sorting
-    if sortBy == "price":
-        if sortOrder == "asc":
-            filtered_products.sort(key=lambda x: x.get("price", 0))
-        else:  # desc
-            filtered_products.sort(key=lambda x: x.get("price", 0), reverse=True)
-    elif sortBy == "rating":
-        if sortOrder == "asc":
-            filtered_products.sort(key=lambda x: _safe_float(x.get("product_score_stars", 0)))
-        else:  # desc
-            filtered_products.sort(key=lambda x: _safe_float(x.get("product_score_stars", 0)), reverse=True)
-    elif sortBy == "volume":
-        if sortOrder == "asc":
-            filtered_products.sort(key=lambda x: x.get("volume", 0))
-        else:  # desc
-            filtered_products.sort(key=lambda x: x.get("volume", 0), reverse=True)
-    elif sortBy == "discount":
-        if sortOrder == "asc":
-            filtered_products.sort(key=lambda x: _calculate_discount_percentage(x))
-        else:  # desc
-            filtered_products.sort(key=lambda x: _calculate_discount_percentage(x), reverse=True)
     
     # Apply pagination
     start_index = (page - 1) * limit
@@ -433,8 +372,6 @@ def list_products(
             "price": 29.99,
             "original_price": 49.99,
             "rating": 4.5,
-        "product_score_stars": 4.5,
-            "product_score_stars": 4.5,
             "review_count": 1250,
             "image_url": "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=300&h=300&fit=crop",
             "product_main_image_url": "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=300&h=300&fit=crop",
@@ -457,7 +394,6 @@ def list_products(
             "price": 89.99,
             "original_price": 129.99,
             "rating": 4.3,
-            "product_score_stars": 4.3,
             "review_count": 890,
             "image_url": "https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=300&h=300&fit=crop",
             "product_main_image_url": "https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=300&h=300&fit=crop",
@@ -556,7 +492,6 @@ def get_product_by_id(
         "sale_price": 29.99,
         "original_price": 49.99,
         "rating": 4.5,
-        "product_score_stars": 4.5,
         "review_count": 1250,
         "image_url": "https://via.placeholder.com/300x300/4F46E5/FFFFFF?text=Demo+Product",
         "product_main_image_url": "https://via.placeholder.com/300x300/4F46E5/FFFFFF?text=Demo+Product",
@@ -584,44 +519,3 @@ def get_product_by_id(
         "source": "demo_data",
         "message": f"Demo product {product_id} loaded successfully"
     }
-
-@router.post("/products/batch/custom-titles")
-def get_batch_custom_titles(product_ids: List[str]):
-    """Get custom titles for multiple products at once"""
-    try:
-        if not product_ids:
-            return {"success": True, "custom_titles": {}}
-        
-        # Get custom titles from database
-        custom_titles = {}
-        cursor = db_ops.get_cursor()
-        
-        if cursor:
-            try:
-                # Create placeholders for the IN clause
-                placeholders = ','.join(['%s'] * len(product_ids))
-                query = f"SELECT product_id, custom_title FROM saved_products WHERE product_id IN ({placeholders})"
-                
-                cursor.execute(query, product_ids)
-                results = cursor.fetchall()
-                
-                for row in results:
-                    product_id, custom_title = row
-                    if custom_title:  # Only include non-null custom titles
-                        custom_titles[str(product_id)] = custom_title
-                        
-            except mysql.connector.Error as e:
-                logging.error(f"Database error in get_batch_custom_titles: {e}")
-            finally:
-                db_ops.close_cursor(cursor)
-        
-        return {
-            "success": True,
-            "custom_titles": custom_titles,
-            "total_requested": len(product_ids),
-            "total_found": len(custom_titles)
-        }
-        
-    except Exception as e:
-        logging.error(f"Error in get_batch_custom_titles: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to get custom titles: {str(e)}")

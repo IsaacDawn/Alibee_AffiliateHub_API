@@ -138,6 +138,15 @@ def filter_products_by_video(products: List[Dict[str, Any]], has_video: bool = N
     else:
         return [p for p in products if not p.get('product_video_url')]
 
+def _safe_float(value):
+    """Safely convert value to float, handling null/None/empty values as 0"""
+    try:
+        if value is None or value == '' or str(value).lower() in ['null', 'none']:
+            return 0.0
+        return float(value)
+    except (ValueError, TypeError):
+        return 0.0
+
 def sort_products(products: List[Dict[str, Any]], sort_by: str = "volume_desc") -> List[Dict[str, Any]]:
     """Sort products by various criteria"""
     if not products:
@@ -145,17 +154,17 @@ def sort_products(products: List[Dict[str, Any]], sort_by: str = "volume_desc") 
     
     try:
         if sort_by == "volume_desc":
-            return sorted(products, key=lambda x: x.get('lastest_volume', 0), reverse=True)
+            return sorted(products, key=lambda x: x.get('lastest_volume', 0) or 0, reverse=True)
         elif sort_by == "volume_asc":
-            return sorted(products, key=lambda x: x.get('lastest_volume', 0))
+            return sorted(products, key=lambda x: x.get('lastest_volume', 0) or 0)
         elif sort_by == "price_desc":
             return sorted(products, key=lambda x: x.get('sale_price', 0), reverse=True)
         elif sort_by == "price_asc":
             return sorted(products, key=lambda x: x.get('sale_price', 0))
         elif sort_by == "rating_desc":
-            return sorted(products, key=lambda x: x.get('rating_weighted', 0), reverse=True)
+            return sorted(products, key=lambda x: _safe_float(x.get('product_score_stars', 0)), reverse=True)
         elif sort_by == "rating_asc":
-            return sorted(products, key=lambda x: x.get('rating_weighted', 0))
+            return sorted(products, key=lambda x: _safe_float(x.get('product_score_stars', 0)))
         else:
             return products
     except Exception as e:

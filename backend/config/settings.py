@@ -29,8 +29,8 @@ class Settings:
     ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "*").split(",")
     
     # Application Configuration
-    DEFAULT_PAGE_SIZE = int(os.getenv("DEFAULT_PAGE_SIZE", 20))
-    MAX_PAGE_SIZE = int(os.getenv("MAX_PAGE_SIZE", 100))
+    DEFAULT_PAGE_SIZE = int(os.getenv("DEFAULT_PAGE_SIZE", 150))
+    MAX_PAGE_SIZE = int(os.getenv("MAX_PAGE_SIZE", 200))
     
     # Background Tasks Configuration
     DAILY_PRODUCTS_ENABLED = os.getenv('DAILY_PRODUCTS_ENABLED', 'false').lower() == 'true'

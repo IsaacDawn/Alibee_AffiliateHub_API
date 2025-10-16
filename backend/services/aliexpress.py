@@ -170,15 +170,24 @@ class AliExpressService:
             if sort == 'discount_desc':
                 # Sort by discount percentage (highest first)
                 items.sort(key=lambda x: self._calculate_discount_percentage(x), reverse=True)
+            elif sort == 'discount_asc':
+                # Sort by discount percentage (lowest first)
+                items.sort(key=lambda x: self._calculate_discount_percentage(x))
             elif sort == 'commission_desc':
                 # Sort by commission rate (highest first)
                 items.sort(key=lambda x: float(x.get('commission_rate', 0) or 0), reverse=True)
             elif sort == 'rating_desc':
-                # Sort by rating (highest first)
-                items.sort(key=lambda x: float(x.get('rating', 0) or 0), reverse=True)
+                # Sort by product_score_stars (highest first)
+                items.sort(key=lambda x: float(x.get('product_score_stars', 0) or 0), reverse=True)
+            elif sort == 'rating_asc':
+                # Sort by product_score_stars (lowest first)
+                items.sort(key=lambda x: float(x.get('product_score_stars', 0) or 0))
             elif sort == 'volume_desc':
                 # Sort by volume (highest first)
                 items.sort(key=lambda x: int(x.get('volume', 0) or 0), reverse=True)
+            elif sort == 'volume_asc':
+                # Sort by volume (lowest first)
+                items.sort(key=lambda x: int(x.get('volume', 0) or 0))
             elif sort == 'price_asc':
                 # Sort by price (lowest first)
                 items.sort(key=lambda x: float(x.get('price', 0) or 0))
@@ -195,13 +204,14 @@ class AliExpressService:
         """Calculate discount percentage for an item"""
         try:
             original_price = float(item.get('original_price', 0) or 0)
-            price = float(item.get('price', 0) or 0)
+            # Use sale_price if available, otherwise use price
+            sale_price = float(item.get('sale_price', item.get('price', 0)) or 0)
             
-            if original_price > 0 and price < original_price:
-                return ((original_price - price) / original_price) * 100
-            return 0
-        except:
-            return 0
+            if original_price > 0 and sale_price > 0 and original_price > sale_price:
+                return ((original_price - sale_price) / original_price) * 100
+            return 0.0
+        except (ValueError, TypeError, ZeroDivisionError):
+            return 0.0
 
     def normalize_product_items(self, raw_data: Dict[str, Any]) -> List[Dict[str, Any]]:
         """Normalize product items from AliExpress API response"""
@@ -272,12 +282,12 @@ class AliExpressService:
                         
                         # Helper function to safely convert percentage fields
                         def safe_percentage_convert(value):
-                            if not value or str(value).strip() == '':
-                                return None
+                            if not value or str(value).strip() == '' or str(value).lower() in ['null', 'none']:
+                                return 0.0
                             try:
                                 return float(str(value).replace('%', ''))
                             except:
-                                return None
+                                return 0.0
                         
                         # Helper function to get product score stars from percentage
                         def get_score_stars(score_str):

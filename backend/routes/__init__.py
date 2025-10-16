@@ -15,6 +15,8 @@ from .dictionary import router as dictionary_router
 from .currency_rates import router as currency_rates_router
 from .currency_converter import router as currency_converter_router
 from .currency_detector import router as currency_detector_router
+from .currency_products import router as currency_products_router
+from .comprehensive_search import router as comprehensive_search_router
 
 # Create main router
 api_router = APIRouter()
@@ -35,5 +37,7 @@ api_router.include_router(dictionary_router, tags=["dictionary"])
 api_router.include_router(currency_rates_router, tags=["currency-rates"])
 api_router.include_router(currency_converter_router, prefix="/currency", tags=["currency-converter"])
 api_router.include_router(currency_detector_router, prefix="/currency", tags=["currency-detector"])
+api_router.include_router(currency_products_router, tags=["currency-products"])
+api_router.include_router(comprehensive_search_router, tags=["comprehensive-search"])
 
 __all__ = ["api_router"]
