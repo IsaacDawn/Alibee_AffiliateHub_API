@@ -26,7 +26,7 @@ class Settings:
     ALIEXPRESS_BASE_URL = os.getenv('ALI_SYNC_BASE', 'https://api-sg.aliexpress.com/sync')
     
     # CORS Configuration
-    ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "*").split(",")
+    ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "https://alibee-affiliatehub-api.onrender.com,http://localhost:5173,http://127.0.0.1:5173").split(",")
     
     # Application Configuration
     DEFAULT_PAGE_SIZE = int(os.getenv("DEFAULT_PAGE_SIZE", 150))
