@@ -1,33 +1,33 @@
-# 🌍 راهنمای جامع سیستم ارز AliExpress
+# 🌍 Comprehensive AliExpress Currency System Guide
 
-## 📋 خلاصه
+## 📋 Summary
 
-سیستم ارز AliExpress به طور کامل پیاده‌سازی شده و از **67 ارز مختلف** از سراسر جهان پشتیبانی می‌کند. این سیستم قابلیت تبدیل قیمت‌ها از هر ارز AliExpress به **USD، EUR، و ILS** را دارد.
+The AliExpress currency system is fully implemented and supports **67 different currencies** from around the world. This system can convert prices from any AliExpress currency to **USD, EUR, and ILS**.
 
-## 🎯 ویژگی‌های کلیدی
+## 🎯 Key Features
 
-### ✅ تبدیل ارز
-- **67 ارز AliExpress** به USD، EUR، ILS
-- استفاده از **USD به عنوان ارز پایه**
-- تبدیل دو مرحله‌ای: `ارز مبدأ → USD → ارز مقصد`
-- دقت بالا در محاسبات
+### ✅ Currency Conversion
+- **67 AliExpress currencies** to USD, EUR, ILS
+- Using **USD as base currency**
+- Two-stage conversion: `Source Currency → USD → Target Currency`
+- High accuracy in calculations
 
-### ✅ تشخیص ارز
-- **47 الگوی regex** برای تشخیص نمادهای ارز
-- **77 کشور** برای تشخیص بر اساس نام کشور
-- پشتیبانی از نمادهای مختلف: `$`, `€`, `£`, `¥`, `₩`, `₹`, `RM`, `฿`, `₫`, `Rp`, `₱`, `₪`, `R$`, `R`, و غیره
+### ✅ Currency Detection
+- **47 regex patterns** for currency symbol detection
+- **77 countries** for detection based on country name
+- Support for various symbols: `$`, `€`, `£`, `¥`, `₩`, `₹`, `RM`, `฿`, `₫`, `Rp`, `₱`, `₪`, `R$`, `R`, etc.
 
-### ✅ پوشش جغرافیایی
-- **🌏 آسیا**: چین، ژاپن، کره، هند، تایلند، ویتنام، اندونزی، فیلیپین، مالزی، سنگاپور، هنگ‌کنگ، تایوان، و 20+ کشور دیگر
-- **🕌 خاورمیانه**: امارات، عربستان، کویت، بحرین، عمان، اردن، لبنان، اسرائیل، ترکیه، و 10+ کشور دیگر
-- **🇪🇺 اروپا**: یورو، پوند، فرانک سوئیس، کرون سوئد، کرون نروژ، کرون دانمارک، زلوتی لهستان، کرون چک، فورینت مجارستان، روبل روسیه، گریونا اوکراین، و 15+ کشور دیگر
-- **🌎 آمریکا**: دلار آمریکا، دلار کانادا، پزو مکزیک، رئال برزیل، پزو آرژانتین، پزو شیلی، پزو کلمبیا، سول پرو، و 8+ کشور دیگر
-- **🌍 آفریقا**: راند آفریقای جنوبی، پوند مصر، نایرا نیجریه، شیلینگ کنیا، درهم مراکش، دینار تونس، و 6+ کشور دیگر
-- **🌏 اقیانوسیه**: دلار استرالیا، دلار نیوزیلند
+### ✅ Geographic Coverage
+- **🌏 Asia**: China, Japan, Korea, India, Thailand, Vietnam, Indonesia, Philippines, Malaysia, Singapore, Hong Kong, Taiwan, and 20+ other countries
+- **🕌 Middle East**: UAE, Saudi Arabia, Kuwait, Bahrain, Oman, Jordan, Lebanon, Israel, Turkey, and 10+ other countries
+- **🇪🇺 Europe**: Euro, Pound, Swiss Franc, Swedish Krona, Norwegian Krone, Danish Krone, Polish Zloty, Czech Koruna, Hungarian Forint, Russian Ruble, Ukrainian Hryvnia, and 15+ other countries
+- **🌎 Americas**: US Dollar, Canadian Dollar, Mexican Peso, Brazilian Real, Argentine Peso, Chilean Peso, Colombian Peso, Peruvian Sol, and 8+ other countries
+- **🌍 Africa**: South African Rand, Egyptian Pound, Nigerian Naira, Kenyan Shilling, Moroccan Dirham, Tunisian Dinar, and 6+ other countries
+- **🌏 Oceania**: Australian Dollar, New Zealand Dollar
 
-## 🗄️ ساختار دیتابیس
+## 🗄️ Database Structure
 
-### جدول `currency_rate`
+### `currency_rate` Table
 ```sql
 CREATE TABLE currency_rate (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

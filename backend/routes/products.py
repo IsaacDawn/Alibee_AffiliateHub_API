@@ -32,61 +32,170 @@ def _calculate_discount_percentage(product):
     except (ValueError, TypeError, ZeroDivisionError):
         return 0.0
 
-def get_custom_titles_for_products(products: List[Dict[str, Any]]) -> Dict[str, str]:
-    """Get custom titles for products from saved_products table"""
+def get_custom_titles_for_products(products: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
+    """Get custom titles and product categories for products from saved_products table"""
     try:
         if not products:
             return {}
-        
-        # Extract product IDs and convert to string
+
+        # Extract product IDs and convert to string (database stores as varchar(255))
         product_ids = [str(product.get("product_id")) for product in products if product.get("product_id")]
-        
+
         if not product_ids:
             return {}
-        
-        # Get custom titles from database
-        custom_titles = {}
+
+        # Debug: Log product IDs being searched
+        print(f"🔍 [get_custom_titles - products.py] Searching for {len(product_ids)} products in database. First 5 IDs: {product_ids[:5]}")
+        logging.info(f"Searching for {len(product_ids)} products in database")
+
+        # Get custom titles and product categories from database
+        saved_products_info = {}
         with db_ops.db.get_cursor() as (cursor, connection):
             placeholders = ','.join(['%s' for _ in product_ids])
             query = f"""
-                SELECT product_id, custom_title 
-                FROM saved_products 
-                WHERE product_id IN ({placeholders}) AND custom_title IS NOT NULL AND custom_title != ''
+                SELECT product_id, custom_title, product_category
+                FROM saved_products
+                WHERE product_id IN ({placeholders})
             """
             cursor.execute(query, product_ids)
             rows = cursor.fetchall()
-            
+
+            print(f"🔍 [get_custom_titles - products.py] Found {len(rows)} products in database")
+
             for row in rows:
-                custom_titles[row[0]] = row[1]
-        
-        logging.info(f"Retrieved {len(custom_titles)} custom titles for {len(product_ids)} products")
-        return custom_titles
-        
+                # product_id in database is varchar(255), so convert to string
+                product_id_db = str(row[0])
+
+                custom_title = row[1] if row[1] else None
+                # Get product_category from database, use 'other' if null or empty
+                raw_category = row[2]
+                product_category = 'other'
+                if raw_category and str(raw_category).strip():
+                    product_category = str(raw_category).strip()
+
+                # Store with product_id as string (matching database varchar type)
+                saved_products_info[product_id_db] = {
+                    'custom_title': custom_title,
+                    'product_category': product_category
+                }
+
+                # Log product_category from database to console
+                print(f"📦 [DATABASE - products.py] Product ID: {product_id_db} | product_category: {product_category} | custom_title: {custom_title[:50] if custom_title else 'None'}...")
+                logging.info(f"Database lookup: Product {product_id_db}: custom_title={custom_title}, product_category={product_category} (raw={raw_category})")
+
+        # Log summary to console
+        print(f"📊 [DATABASE SUMMARY - products.py] Found {len(saved_products_info)} products in database out of {len(product_ids)} searched products")
+        if saved_products_info:
+            print("📋 Products with product_category from database:")
+            for pid, info in saved_products_info.items():
+                print(f"   - Product {pid}: product_category = '{info.get('product_category', 'other')}'")
+        else:
+            print(f"⚠️ [get_custom_titles - products.py] No products found in database! Searched IDs: {product_ids[:10]}")
+
+        logging.info(f"Retrieved {len(saved_products_info)} saved products info for {len(product_ids)} products")
+        return saved_products_info
+
     except Exception as e:
         logging.error(f"Error getting custom titles: {e}")
+        print(f"❌ [get_custom_titles - products.py] ERROR: {e}")
+        import traceback
+        traceback.print_exc()
         return {}
 
 def add_custom_titles_to_products(products: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Add custom titles to products"""
+    """Add custom titles and override product_category from database"""
     try:
         if not products:
             return products
         
-        # Get custom titles for all products
-        custom_titles = get_custom_titles_for_products(products)
+        # Debug: Log function entry
+        print(f"🔵 [add_custom_titles - products.py] ENTRY: Processing {len(products)} products")
+        logging.info(f"add_custom_titles_to_products called with {len(products)} products")
         
-        # Add custom_title to each product
+        # Get custom titles and product categories for all products
+        saved_products_info = get_custom_titles_for_products(products)
+        logging.info(f"🔍 Found {len(saved_products_info)} products in database out of {len(products)} total products")
+        print(f"🔍 [add_custom_titles - products.py] Found {len(saved_products_info)} products in database out of {len(products)} total products")
+        if saved_products_info:
+            print(f"🔍 [add_custom_titles - products.py] Products in database: {list(saved_products_info.keys())[:5]}")
+        else:
+            print(f"⚠️ [add_custom_titles - products.py] No products found in database! Check if products exist in saved_products table.")
+        
+        # Add custom_title and override product_category for each product
         for product in products:
-            product_id = product.get("product_id")
-            if product_id and str(product_id) in custom_titles:
-                product["custom_title"] = custom_titles[str(product_id)]
+            product_id = str(product.get("product_id", ""))
+            product_id_int = int(product_id) if product_id.isdigit() else None
+            
+            # Debug: Log product ID and whether it's in saved_products_info
+            if product_id:
+                is_in_db = product_id in saved_products_info
+                has_custom_title = product.get("custom_title") is not None and product.get("custom_title") != ""
+                print(f"🔍 [add_custom_titles - products.py] Product ID: {product_id} | In DB: {is_in_db} | Has custom_title: {has_custom_title}")
+            
+            # Try to find product in saved_products_info using both string and integer keys
+            saved_info = None
+            if product_id and product_id in saved_products_info:
+                saved_info = saved_products_info[product_id]
+            elif product_id_int and str(product_id_int) in saved_products_info:
+                saved_info = saved_products_info[str(product_id_int)]
+            
+            if saved_info:
+                # Log original product_category from API before override
+                original_api_category = product.get("product_category", "N/A")
+                original_custom_title = product.get("custom_title", "N/A")
+                print(f"🔄 [BEFORE OVERRIDE - products.py] Product ID: {product_id} | Original API product_category: {original_api_category} | Original custom_title: {original_custom_title[:50] if original_custom_title != 'N/A' else 'N/A'}...")
+                
+                # If product has custom_title in database, replace the title
+                db_custom_title = saved_info.get("custom_title")
+                if db_custom_title:
+                    product["custom_title"] = db_custom_title
+                    print(f"📝 [TITLE - products.py] Product {product_id}: Set custom_title from DB: {db_custom_title[:50]}...")
+                else:
+                    product["custom_title"] = None
+                    print(f"📝 [TITLE - products.py] Product {product_id}: No custom_title in DB, set to None")
+                
+                # Override product_category with the one from database
+                db_category = saved_info.get("product_category", "other")
+                final_category = db_category if db_category else "other"
+                product["product_category"] = final_category
+                
+                # Set a flag to indicate this product is in database (for frontend to use)
+                product["is_saved_in_db"] = True
+                
+                # Log to console - show before and after
+                print(f"✅ [APPLIED - products.py] Product ID: {product_id} | API category: {original_api_category} -> DB category: {final_category} | is_saved_in_db: {product.get('is_saved_in_db')} | custom_title from DB: {db_custom_title[:50] if db_custom_title else 'None'}...")
+                logging.info(f"✅ Applied saved info to product {product_id}: custom_title={product.get('custom_title')}, product_category={original_api_category} -> {final_category}, is_saved_in_db={product.get('is_saved_in_db')}")
+                
+                # Verify the override worked
+                if product.get("product_category") != final_category:
+                    print(f"⚠️ [WARNING - products.py] Override failed! Product {product_id} still has product_category={product.get('product_category')} instead of {final_category}")
+                    logging.warning(f"Override failed for product {product_id}: expected {final_category}, got {product.get('product_category')}")
+                
+                # Verify is_saved_in_db is set
+                if not product.get("is_saved_in_db"):
+                    print(f"⚠️ [WARNING - products.py] is_saved_in_db not set! Product {product_id} should have is_saved_in_db=True")
+                    logging.warning(f"is_saved_in_db not set for product {product_id}")
             else:
                 product["custom_title"] = None
+                product["is_saved_in_db"] = False
+                logging.debug(f"❌ Product {product_id} not found in database, is_saved_in_db set to False")
+        
+        # Debug: Log how many products have is_saved_in_db flag
+        products_with_flag = [p for p in products if "is_saved_in_db" in p]
+        products_with_flag_true = [p for p in products if p.get("is_saved_in_db") == True]
+        products_with_custom_title = [p for p in products if p.get("custom_title")]
+        print(f"🔍 [DEBUG - products.py] After add_custom_titles: {len(products_with_flag)} products have is_saved_in_db flag, {len(products_with_flag_true)} have is_saved_in_db=True, {len(products_with_custom_title)} have custom_title")
+        logging.info(f"🔍 After add_custom_titles: {len(products_with_flag)} products have is_saved_in_db flag, {len(products_with_flag_true)} have is_saved_in_db=True, {len(products_with_custom_title)} have custom_title")
+        
+        print(f"🔵 [add_custom_titles - products.py] EXIT: Returning {len(products)} products")
         
         return products
         
     except Exception as e:
         logging.error(f"Error adding custom titles to products: {e}")
+        print(f"❌ [add_custom_titles - products.py] ERROR: {e}")
+        import traceback
+        traceback.print_exc()
         return products
 
 @router.get("/products/initial")
@@ -510,14 +619,33 @@ def get_product_by_id(
             
             if result and result.get("success") and result.get("items"):
                 items = result.get("items", [])
+                
+                # Debug: Log items before add_custom_titles_to_products
+                if items and len(items) > 0:
+                    first_item = items[0]
+                    print(f"🔵 [BEFORE add_custom_titles] Product ID: {first_item.get('product_id')} | product_category: {first_item.get('product_category')} | custom_title: {first_item.get('custom_title')}")
+                    logging.info(f"🔵 Before add_custom_titles: Product {first_item.get('product_id')}: product_category={first_item.get('product_category')}")
+                
                 # Add custom titles to products
                 items = add_custom_titles_to_products(items)
+                
+                # Debug: Log items after add_custom_titles_to_products
+                if items and len(items) > 0:
+                    first_item = items[0]
+                    print(f"🟢 [AFTER add_custom_titles] Product ID: {first_item.get('product_id')} | is_saved_in_db: {first_item.get('is_saved_in_db')} | product_category: {first_item.get('product_category')} | custom_title: {first_item.get('custom_title')}")
+                    logging.info(f"🟢 After add_custom_titles: Product {first_item.get('product_id')}: is_saved_in_db={first_item.get('is_saved_in_db')}, product_category={first_item.get('product_category')}")
+                
+                # Debug: Log first product before returning
+                if items and len(items) > 0:
+                    first_prod = items[0]
+                    print(f"📤 [GET_PRODUCT_BY_ID] Product ID: {first_prod.get('product_id')} | is_saved_in_db: {first_prod.get('is_saved_in_db')} | product_category: {first_prod.get('product_category')} | custom_title: {first_prod.get('custom_title')}")
+                    logging.info(f"📤 [GET_PRODUCT_BY_ID] Product {first_prod.get('product_id')}: is_saved_in_db={first_prod.get('is_saved_in_db')}, product_category={first_prod.get('product_category')}")
                 
                 # Filter products with video if only_with_video=1
                 if only_with_video == 1:
                     items = [product for product in items if product.get("video_link") and product.get("video_link").strip()]
                 
-                return {
+                response_data = {
                     "success": True,
                     "product_id": product_id,
                     "items": items,
@@ -526,6 +654,17 @@ def get_product_by_id(
                     "source": result.get("source", "aliexpress_api"),
                     "message": f"Found product {product_id} from AliExpress API"
                 }
+                
+                # Debug: Log JSON response for first product
+                if items and len(items) > 0:
+                    import json
+                    first_item_json = json.dumps(response_data["items"][0], indent=2, default=str)
+                    print(f"📤 [JSON RESPONSE - GET_PRODUCT_BY_ID] First product in response:\n{first_item_json}")
+                    # Also log full response for debugging
+                    full_response_json = json.dumps(response_data, indent=2, default=str)
+                    print(f"📤 [FULL JSON RESPONSE - GET_PRODUCT_BY_ID] Complete response (first 2000 chars):\n{full_response_json[:2000]}...")
+                
+                return response_data
             else:
                 # Return error response
                 return {
